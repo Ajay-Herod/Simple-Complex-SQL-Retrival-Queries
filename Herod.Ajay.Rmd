@@ -1,0 +1,283 @@
+---
+title: "cind110_Assignment_02"
+author: "Ajay Herod"
+due: "November 18, 2020"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+Use RStudio for this assignment. 
+Edit the file `A2_F20_Q.Rmd` and insert your R code where wherever you see the string "#INSERT YOUR ANSWER HERE"
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document.
+
+This assignment makes use of data that were adapted from:
+R. Elmasri, S.B. Navathe (2016). Fundamentals of Database Systems, 7th Edition, Addison-Wesley
+
+
+#Setting the working diectory and establishing a connection to MYSQL Server
+```{r}
+#install.packages('RMySQL', dependencies = TRUE)
+library(RMySQL)
+sqlQuery <- function (query) {
+  # creating DB connection object with RMysql package
+  # Please consider changing the username and password 
+  DB <- dbConnect(MySQL(), user='root', password='data', dbname='CompanyDB', host='127.0.0.1:3306')
+
+  # send Query to btain result set
+  rs <- dbSendQuery(DB, query)
+
+  # get elements from result sets and convert to dataframe
+  result <- fetch(rs, -1)
+  
+  #Clear results  
+  dbClearResult(dbListResults(DB)[[1]])
+  
+  # close db connections
+  cons <- dbListConnections(MySQL())
+  for(con in cons)
+    dbDisconnect(con)
+  
+  # return the dataframe
+  return(result)
+
+}
+```
+
+
+#Example 1
+Retrieve the name and address of all employees who work for the 'Marketing' department.
+```{r}
+sqlQuery("SELECT Fname, Lname, Address 
+         FROM EMPLOYEE, DEPARTMENT
+         WHERE Dname = 'Marketing' AND Dnumber = Dno;")
+```
+
+#Example 2
+For every project located in 'Toronto', list the project name, project number, the controlling department number, and the department manager’s last name.
+```{r}
+sqlQuery(" SELECT Pname, Pnumber, Dnumber, Lname
+           FROM PROJECT, DEPARTMENT, EMPLOYEE 
+           WHERE MgrSsn = Ssn 
+                 AND 
+                 Plocation = 'Toronto';")
+```
+
+#Q1
+Retrieve all distinct salary values of every employee.
+```{r}
+sqlQuery("SELECT DISTINCT Salary 
+          FROM EMPLOYEE;")
+```
+
+#Q2
+Retrieve the first name, address and salary of each employee whose last name is 'English' and who works for a department named either 'Marketing' or 'Administration'
+```{r}
+sqlQuery("SELECT Fname, Address, Salary
+          FROM EMPLOYEE, DEPARTMENT
+          WHERE (Lname = 'English' AND Dname = 'Marketing' AND Dnumber = Dno)
+          OR
+          (Lname = 'English' AND Dname = 'Administration' AND Dnumber = Dno);")
+```
+
+#Q3
+Retrieve the last name and birthdate of each male employee whose salary is at least $20,000 and who works for either Department 4 or Department 5.
+```{r}
+sqlQuery("SELECT Lname, Bdate
+          FROM EMPLOYEE
+          WHERE (Gender = 'M'AND Salary > 20000 AND Dno = 4)
+          OR 
+          (Gender = 'M'AND Salary > 20000 AND Dno = 5);")
+```
+
+#Q4
+Retrieve the names of all employees who do not have supervisors.
+```{r}
+sqlQuery("SELECT Fname, Lname
+          FROM EMPLOYEE
+          WHERE SuperSsn IS NULL;")
+```
+
+#Q5
+List the names of managers who have at least one dependent.
+```{r}
+sqlQuery("SELECT Fname, Lname
+          FROM EMPLOYEE
+          WHERE EXISTS (SELECT *
+                        FROM DEPENDENT
+                        WHERE Ssn = Essn)
+                AND
+                EXISTS (SELECT *
+                        FROM DEPARTMENT
+                        WHERE Ssn = MgrSsn);")
+```
+
+#Q6
+Retrieve the Social Security numbers of all employees who work on project numbers 100, 200, 300, or 400.
+```{r}
+sqlQuery("SELECT Ssn
+          FROM EMPLOYEE, WORKSON
+          WHERE (Ssn = Essn AND Pno = 100)
+          OR
+          (Ssn = Essn AND Pno = 100)
+          OR
+          (Ssn = Essn AND Pno = 200)
+          OR
+          (Ssn = Essn AND Pno = 300)
+          OR
+          (Ssn = Essn AND Pno = 400);")
+```
+
+#Q7
+Find the average of the salaries of all employees, the maximum salary, and the minimum salary.
+```{r}
+sqlQuery("SELECT AVG(Salary), MAX(Salary), MIN(Salary)
+          FROM EMPLOYEE;")
+```
+
+#Q8
+Find the sum of the salaries of all employees of the 'Marketing' department.
+```{r}
+sqlQuery("SELECT SUM(Salary)
+          FROM EMPLOYEE, DEPARTMENT
+          WHERE Dno = Dnumber AND Dname = 'Marketing';")
+```
+
+#Q9
+For each department, retrieve the department number, the number of employees in the department, and their average salary.
+```{r}
+sqlQuery("SELECT Dno, COUNT(*), AVG(Salary)
+          FROM EMPLOYEE
+          GROUP BY Dno;")
+```
+
+#Q10
+For each project, retrieve the project number, the project name, and the number of employees from department 4 who work on the project.
+```{r}
+sqlQuery("SELECT Pnumber, Pname, COUNT(*)
+          FROM EMPLOYEE, PROJECT, WORKSON
+          WHERE Pnumber = Pno AND Ssn = Essn AND Dno = 4
+          GROUP BY Pnumber, Pname;")
+```
+
+#Q11
+For each department that has more than two employees, retrieve the department number and the number of its employees who are making less than $80,000.
+```{r}
+sqlQuery("SELECT Dnumber, COUNT(*)
+          FROM EMPLOYEE, DEPARTMENT
+          WHERE Dnumber = Dno AND Salary<80000 
+                AND
+                Dno IN (SELECT Dno
+                        FROM EMPLOYEE
+                        GROUP BY Dno
+                        HAVING COUNT(*)>2)
+          GROUP BY Dnumber;")
+```
+
+#Q12
+Retrieve the social security number of any employee who works on a project that is controlled by a department other than the one for which the employee works.
+```{r}
+sqlQuery("SELECT Ssn
+          FROM EMPLOYEE
+          WHERE EXISTS (SELECT *
+                        FROM WORKSON, PROJECT
+                        WHERE Ssn = Essn AND Pno = Pnumber)
+          AND
+          NOT EXISTS (SELECT *
+                      FROM DEPT_LOCATIONS, PROJECT
+                      WHERE Dno = Dnumber AND Plocation = Dlocation);")
+```
+
+#Q13
+For each department whose average employee salary is less than $80,000, retrieve the department name and the number of employees working for that department.
+```{r}
+sqlQuery("SELECT Dname, COUNT(*)
+          FROM EMPLOYEE, DEPARTMENT
+          WHERE Dno = Dnumber AND AVG(Salary) < 80000
+          GROUP BY Dno;")
+```
+
+#Q14
+Retrieve the names of all employees who work in the department that has the employee with the highest salary among all employees.
+```{r}
+sqlQuery("SELECT Fname, Lname
+          FROM EMPLOYEE
+          WHERE Dno =  (SELECT Dno 
+                        FROM EMPLOYEE 
+                        WHERE Salary = (SELECT MAX(Salary)
+                                        FROM EMPLOYEE));")
+```
+
+#Q15
+Retrieve the names of employees who make at least $30,000 more than the employee who is paid the least in the company.
+```{r}
+sqlQuery("SELECT Fname, Lname
+          FROM EMPLOYEE
+          WHERE Salary >= 30000 + (SELECT MIN(Salary) 
+                                   FROM EMPLOYEE;")
+```
+
+#Q16
+Write a SQL query to fetch project-wise count of employees sorted by project's count in descending order.
+```{r}
+sqlQuery("SELECT Pname, Pnumber, COUNT(Ssn)
+          FROM PROJECT
+          WHERE (SELECT Ssn
+                 FROM EMPLOYEE, WORKSON
+                 WHERE Ssn = Essn AND Pno = Pnumber)
+          GROUP BY PROJECT
+          ORDER BY COUNT(Ssn) DESC")
+```
+
+#Q17
+Write a SQL query to fetch a list of employees working on more than 2 projects and show the result in desc order.
+```{r}
+sqlQuery("SELECT Fname, Lname, COUNT(Essn)
+          FROM EMPLOYEE, WORKSON
+          WHERE Essn = Ssn
+                AND
+                Essn IN (SELECT Essn
+                         FROM WORKSON
+                         GROUP BY Essn)
+                         HAVING COUNT(Essn)>2)
+          GROUP BY Ssn
+          ORDER BY COUNT(Essn) DESC;")
+```
+
+#Q18
+Write a query to fetch employee names and dependent records. Return employee details even if the dependent record is not present for the employee.
+```{r}
+sqlQuery("SELECT Fname, Lname, DependentName
+          FROM EMPLOYEE
+          LEFT JOIN DEPENDENT
+          ON Ssn = Essn;")
+```
+
+#Q19
+Write a query to fetch employee names and dependent records. Return employee details if the dependent record is present for the employee.
+```{r}
+sqlQuery("SELECT Fname, Lname, DependentName
+          FROM EMPLOYEE
+          INNER JOIN DEPENDENT
+          ON Ssn = Essn;")
+```
+
+#Q20
+Write an SQL query to fetch duplicate records based on essn and pno from the 'WORKSON' table.
+```{r}
+sqlQuery("SELECT Essn, Pno, COUNT(1) AS DUPLICATE
+          FROM WORKSON
+          GROUP BY Essn, Pno
+          HAVING COUNT(1) > 1;")
+```
